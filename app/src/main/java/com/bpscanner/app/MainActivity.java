@@ -28,6 +28,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         buildUi();
+        new android.os.Handler(getMainLooper()).postDelayed(() -> new UpdateManager(this).check(), 3500);
         if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera();
         else requestPermissions(new String[]{Manifest.permission.CAMERA},7);
     }
