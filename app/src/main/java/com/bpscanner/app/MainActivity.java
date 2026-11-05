@@ -67,9 +67,16 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         Camera.Size s=source.getParameters().getPreviewSize(); int count=Math.min(data.length,s.width*s.height);
         long sum=0; for(int i=0;i<count;i++)sum+=(data[i]&255);
         double v=sum/(double)Math.max(1,count); long now=System.currentTimeMillis(); frames++;
-        if(frames>10 && previous>v && now-lastPeak>350 && now-lastPeak<2000) {
-            long interval=now-lastPeak; lastPeak=now; int bpm=(int)(60000/interval);
-            if(bpm>=40&&bpm<=200) runOnUiThread(()->{bpmText.setText(bpm+" BPM");statusText.setText("تخمین آزمایشی؛ برای تصمیم پزشکی معتبر نیست.");});
+        if(frames>10 && previous>v) {
+            if(lastPeak==0) {
+                lastPeak=now;
+            } else {
+                long interval=now-lastPeak;
+                lastPeak=now;
+                int bpm=(int)(60000/interval);
+                if(interval>=350 && interval<=2000 && bpm>=40 && bpm<=200)
+                    runOnUiThread(()->{bpmText.setText(bpm+" BPM");statusText.setText("تخمین آزمایشی؛ برای تصمیم پزشکی معتبر نیست.");});
+            }
         }
         previous=v;
     }
