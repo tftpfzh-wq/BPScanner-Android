@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId 'com.bpscanner.app'
         minSdk 23
-        targetSdk 28
+        targetSdk 35
         versionCode releaseCode
         versionName releaseTag.startsWith('v') ? releaseTag.substring(1) : '0.1.0'
     }
