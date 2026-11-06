@@ -70,8 +70,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.4' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.5' }}
           target_commitish: main
           files: app/build/outputs/apk/release/BPScanner.apk
-          name: BP Scanner ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.4' }}
+          name: BP Scanner ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.5' }}
           body: "به‌روزرسانی BP Scanner"
