@@ -163,6 +163,15 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         LinearLayout.LayoutParams calibrationParams = lp(-1, 48);
         calibrationParams.topMargin = dp(4);
         root.addView(calibrationButton, calibrationParams);
+
+        Button calibrationStatusButton = new Button(this);
+        calibrationStatusButton.setText("وضعیت و نمونه‌های کالیبراسیون");
+        calibrationStatusButton.setTextColor(0xFFFFB8C3);
+        calibrationStatusButton.setBackground(shape(PANEL, 0xFF8D1A32, 14));
+        calibrationStatusButton.setOnClickListener(v -> showCalibrationStatus());
+        LinearLayout.LayoutParams calibrationStatusParams = lp(-1, 44);
+        calibrationStatusParams.topMargin = dp(4);
+        root.addView(calibrationStatusButton, calibrationStatusParams);
         TextView calibrationInfo = text("برای ساخت مدل شخصی، نتیجه اسکن و فشار مرجع باید هم‌زمان ثبت شوند.", 11, 0xFFFFB8C3, false);
         root.addView(calibrationInfo, lp(-1, 28));
 
