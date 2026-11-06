@@ -147,12 +147,21 @@ public class UpdateManager {
         });
     }
 
+    public void resumePendingInstall() {
+        try {
+            File apk = new File(new File(activity.getCacheDir(), "updates"), "BPScanner.apk");
+            if (!apk.isFile() || apk.length() == 0) return;
+            if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
+            launchInstaller(apk);
+        } catch (Exception ignored) { }
+    }
+
     private void install(File apk) {
         try {
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
                 new AlertDialog.Builder(activity)
                     .setTitle("اجازه نصب آپدیت")
-                    .setMessage("برای نصب نسخه جدید، اجازه نصب برنامه از این منبع را فعال کنید.")
+                    .setMessage("برای نصب نسخه جدید، اجازه نصب برنامه از این منبع را فعال کنید. پس از فعال‌سازی، به BP Scanner برگردید تا نصب ادامه پیدا کند.")
                     .setNegativeButton("لغو", null)
                     .setPositiveButton("تنظیمات", (d, w) -> activity.startActivity(
                         new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -160,14 +169,18 @@ public class UpdateManager {
                     .show();
                 return;
             }
+            launchInstaller(apk);
+        } catch (Exception e) {
+            showMessage("بازکردن نصب‌کننده ناموفق بود.");
+        }
+    }
+
+    private void launchInstaller(File apk) throws Exception {
             Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".fileprovider", apk);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, "application/vnd.android.package-archive");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(intent);
-        } catch (Exception e) {
-            showMessage("بازکردن نصب‌کننده ناموفق بود.");
-        }
     }
 
     private byte[] readAll(InputStream in) throws Exception {
