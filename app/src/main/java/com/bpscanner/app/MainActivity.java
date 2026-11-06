@@ -121,7 +121,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         LinearLayout pressure = vertical();
         pressure.addView(text("♥  فشار خون", 16, 0xFFFF9EAE, true), lp(-1, 28));
         pressure.addView(text("-- / --", 30, 0xFFEDE8EA, true), lp(-1, 52));
-        pressure.addView(text("نیازمند دستگاه کاف‌دار", 11, 0xFFFFB8C3, false), lp(-1, 24));
+        pressure.addView(text("تخمین با دوربین: در دست توسعه", 11, 0xFFFFB8C3, false), lp(-1, 24));
         metrics.addView(pressure, new LinearLayout.LayoutParams(0, dp(112), 1));
         root.addView(metrics, lp(-1, 138));
 
@@ -170,7 +170,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         tiles.addView(tile("↻", "به‌روزرسانی", "بررسی نسخه جدید", () -> new UpdateManager(this).check()), new LinearLayout.LayoutParams(0, dp(108), 1));
         root.addView(tiles, lp(-1, 126));
 
-        TextView disclaimer = text("این نسخه آزمایشی است و فشار خون را اندازه‌گیری نمی‌کند. برای سنجش فشار خون از دستگاه معتبر بازویی استفاده کنید.", 11, 0xFFFFB7C1, false);
+        TextView disclaimer = text("تخمین فشار خون با دوربین هنوز در حال توسعه و اعتبارسنجی است؛ فعلاً عدد فشار خون نمایش داده نمی‌شود و این برنامه ابزار تشخیص یا تصمیم درمانی نیست.", 11, 0xFFFFB7C1, false);
         disclaimer.setPadding(dp(8), dp(10), dp(8), dp(10));
         disclaimer.setBackground(shape(0xFF170D12, 0xFF6C172B, 14));
         LinearLayout.LayoutParams note = lp(-1, -2);
@@ -321,6 +321,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
+        new UpdateManager(this).resumePendingInstall();
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && holder != null && holder.getSurface().isValid()) startCamera();
     }
 }
