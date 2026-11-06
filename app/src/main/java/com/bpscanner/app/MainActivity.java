@@ -21,6 +21,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     private TextView bpmText, statusText;
     private Button scanButton;
     private boolean scanning=false;
+    private boolean activityResumed=false;
     private double previous=0;
     private long lastPeak=0;
     private int frames=0;
@@ -29,8 +30,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         super.onCreate(state);
         buildUi();
         new android.os.Handler(getMainLooper()).postDelayed(() -> new UpdateManager(this).check(), 3500);
-        if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera();
-        else requestPermissions(new String[]{Manifest.permission.CAMERA},7);
+        if(checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{Manifest.permission.CAMERA},7);
     }
     private void buildUi() {
         LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -85,11 +86,45 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         try { camera=Camera.open(); camera.setPreviewDisplay(holder); camera.setPreviewCallback(this); camera.startPreview(); }
         catch(Exception e){statusText.setText("راه‌اندازی دوربین ناموفق بود.");releaseCamera();}
     }
-    @Override public void surfaceCreated(SurfaceHolder h){if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED&&camera==null)startCamera();}
-    @Override public void surfaceChanged(SurfaceHolder h,int f,int w,int he){}
+    @Override public void surfaceCreated(SurfaceHolder h){
+        if(activityResumed && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera();
+    }
+    @Override public void surfaceChanged(SurfaceHolder h,int f,int w,int he){
+        if(activityResumed && camera==null && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera();
+    }
     @Override public void surfaceDestroyed(SurfaceHolder h){releaseCamera();}
-    private void releaseCamera(){if(camera!=null){try{camera.setPreviewCallback(null);camera.stopPreview();camera.release();}catch(Exception ignored){}camera=null;}}
-    @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){super.onRequestPermissionsResult(r,p,g);if(r==7&&g.length>0&&g[0]==PackageManager.PERMISSION_GRANTED)startCamera();else statusText.setText("مجوز دوربین لازم است.");}
-    @Override protected void onPause(){super.onPause();releaseCamera();}
-    @Override protected void onResume(){super.onResume();if(holder!=null&&holder.getSurface().isValid()&&checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED&&camera==null)startCamera();}
+    private void startCamera(){
+        if(!activityResumed || camera!=null || holder==null || !holder.getSurface().isValid()) return;
+        if(checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) return;
+        try {
+            camera=Camera.open();
+            camera.setPreviewDisplay(holder);
+            camera.setPreviewCallback(this);
+            camera.startPreview();
+            statusText.setText("دوربین آماده است؛ برای شروع اسکن دکمه را بزن.");
+        } catch(Exception e){
+            statusText.setText("راه‌اندازی دوربین ناموفق بود. برنامه را دوباره باز کن.");
+            releaseCamera();
+        }
+    }
+    private void releaseCamera(){
+        scanning=false;
+        if(scanButton!=null) scanButton.setText("شروع اسکن");
+        if(camera!=null){
+            Camera old=camera;
+            camera=null;
+            try{old.setPreviewCallback(null);old.stopPreview();}catch(Exception ignored){}
+            try{old.release();}catch(Exception ignored){}
+        }
+    }
+    @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){
+        super.onRequestPermissionsResult(r,p,g);
+        if(r==7&&g.length>0&&g[0]==PackageManager.PERMISSION_GRANTED){
+            if(activityResumed && holder!=null && holder.getSurface().isValid()) startCamera();
+        } else if(statusText!=null) statusText.setText("مجوز دوربین لازم است.");
+    }
+    @Override protected void onPause(){activityResumed=false;releaseCamera();super.onPause();}
+    @Override protected void onResume(){super.onResume();activityResumed=true;
+        if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED && holder!=null && holder.getSurface().isValid()) startCamera();
+    }
 }
