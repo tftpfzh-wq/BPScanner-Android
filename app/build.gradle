@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 def releaseTag = System.getenv('GITHUB_REF_NAME') ?: ''
 def tagParts = releaseTag.replaceFirst('^[vV]', '').split('\\.')
-def releaseCode = 104
+def releaseCode = 105
 if (releaseTag.startsWith('v') && tagParts.length == 3) {
     releaseCode = tagParts[0].toInteger() * 10000 + tagParts[1].toInteger() * 100 + tagParts[2].replaceAll('[^0-9].*$', '').toInteger()
 }
@@ -13,7 +13,7 @@ android {
         minSdk 23
         targetSdk 35
         versionCode releaseCode
-        versionName releaseTag.startsWith('v') ? releaseTag.substring(1) : '0.1.4'
+        versionName releaseTag.startsWith('v') ? releaseTag.substring(1) : '0.1.5'
     }
     signingConfigs {
         release {
