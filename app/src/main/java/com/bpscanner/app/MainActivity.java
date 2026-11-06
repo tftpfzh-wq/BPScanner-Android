@@ -13,11 +13,16 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.SharedPreferences;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 @SuppressWarnings("deprecation")
 public class MainActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback {
@@ -27,13 +32,18 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     private Camera camera;
     private SurfaceView preview;
     private SurfaceHolder holder;
-    private TextView bpmText, statusText, scanTitle;
+    private TextView bpmText, statusText, scanTitle, pressureValue;
     private Button scanButton;
     private boolean scanning = false;
     private boolean activityResumed = false;
     private double previous = 0;
     private long lastPeak = 0;
     private int frames = 0;
+    private long scanStartedAt = 0;
+    private int signalSamples = 0;
+    private double signalSum = 0, signalSumSq = 0, signalMin = 255, signalMax = 0;
+    private int latestBpm = 0;
+    private final android.os.Handler scanHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -120,12 +130,13 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         metrics.addView(divider, lp(1, 82));
         LinearLayout pressure = vertical();
         pressure.addView(text("♥  فشار خون", 16, 0xFFFF9EAE, true), lp(-1, 28));
-        pressure.addView(text("-- / --", 30, 0xFFEDE8EA, true), lp(-1, 52));
-        pressure.addView(text("تخمین با دوربین: در دست توسعه", 11, 0xFFFFB8C3, false), lp(-1, 24));
+        pressureValue = text("قابل اندازه‌گیری نیست", 17, 0xFFEDE8EA, true);
+        pressure.addView(pressureValue, lp(-1, 52));
+        pressure.addView(text("نیازمند اعتبارسنجی پزشکی", 11, 0xFFFFB8C3, false), lp(-1, 24));
         metrics.addView(pressure, new LinearLayout.LayoutParams(0, dp(112), 1));
         root.addView(metrics, lp(-1, 138));
 
-        TextView scanHeading = text("پایش ضربان قلب", 20, Color.WHITE, true);
+        TextView scanHeading = text("آزمایش ثبت سیگنال مچ", 20, Color.WHITE, true);
         scanHeading.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams sh = lp(-1, 42);
         sh.topMargin = dp(12);
@@ -170,7 +181,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         tiles.addView(tile("↻", "به‌روزرسانی", "بررسی نسخه جدید", () -> new UpdateManager(this).check()), new LinearLayout.LayoutParams(0, dp(108), 1));
         root.addView(tiles, lp(-1, 126));
 
-        TextView disclaimer = text("تخمین فشار خون با دوربین هنوز در حال توسعه و اعتبارسنجی است؛ فعلاً عدد فشار خون نمایش داده نمی‌شود و این برنامه ابزار تشخیص یا تصمیم درمانی نیست.", 11, 0xFFFFB7C1, false);
+        TextView disclaimer = text("این نسخه فقط سیگنال نوری مچ و ضربان را برای آزمایش ثبت می‌کند. فشار سیستولیک و دیاستولیک با دوربین هنوز قابل اندازه‌گیری معتبر نیست؛ برای تصمیم درمانی از فشارسنج تأییدشده استفاده کنید.", 11, 0xFFFFB7C1, false);
         disclaimer.setPadding(dp(8), dp(10), dp(8), dp(10));
         disclaimer.setBackground(shape(0xFF170D12, 0xFF6C172B, 14));
         LinearLayout.LayoutParams note = lp(-1, -2);
@@ -213,10 +224,38 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     }
 
     private void showHistory() {
-        new android.app.AlertDialog.Builder(this)
-            .setTitle("سوابق اندازه‌گیری")
-            .setMessage("هنوز سابقه‌ای ثبت نشده است. پس از انجام اسکن‌های آزمایشی، نتایج معتبرِ ضربان قلب در این بخش قابل نمایش خواهند بود.")
+        SharedPreferences p = getPreferences(MODE_PRIVATE);
+        String date = p.getString("test_date", null);
+        String details = date == null ? "هنوز اسکن آزمایشی ثبت نشده است." :
+            "آخرین اسکن: " + date + "\\nمدت: " + p.getLong("test_duration", 0) + " ثانیه" +
+            "\\nنمونه‌های ثبت‌شده: " + p.getInt("test_samples", 0) +
+            "\\nضربان تخمینی: " + p.getInt("test_bpm", 0) + " BPM" +
+            "\\nکیفیت سیگنال: " + p.getString("test_quality", "نامشخص") +
+            "\\nفشار درمانگاه: " + p.getString("clinic_bp", "ثبت نشده");
+        new android.app.AlertDialog.Builder(this).setTitle("گزارش آزمایش")
+            .setMessage(details)
+            .setNeutralButton("ثبت فشار درمانگاه", (d,w) -> showClinicEntry())
             .setPositiveButton("باشه", null).show();
+    }
+
+    private void showClinicEntry() {
+        LinearLayout form = vertical();
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        EditText sys = new EditText(this); sys.setSingleLine(true); sys.setInputType(2); sys.setHint("سیستولیک (عدد بالا)، مثلاً 120");
+        EditText dia = new EditText(this); dia.setSingleLine(true); dia.setInputType(2); dia.setHint("دیاستولیک (عدد پایین)، مثلاً 80");
+        form.addView(sys, lp(-1, 54)); form.addView(dia, lp(-1, 54));
+        new android.app.AlertDialog.Builder(this).setTitle("ثبت نتیجه فشارسنج درمانگاه")
+            .setMessage("اعداد را دقیقاً از روی اندازه‌گیری پرستار وارد کن. این اعداد مرجع مقایسه‌اند و خروجی گوشی نیستند.")
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره", (d,w) -> {
+                try {
+                    int s = Integer.parseInt(sys.getText().toString().trim());
+                    int diaValue = Integer.parseInt(dia.getText().toString().trim());
+                    if (s < 60 || s > 260 || diaValue < 30 || diaValue > 160 || s <= diaValue) throw new Exception();
+                    getPreferences(MODE_PRIVATE).edit().putString("clinic_bp", s + "/" + diaValue + " mmHg").apply();
+                    Toast.makeText(this, "نتیجه درمانگاه ذخیره شد.", Toast.LENGTH_LONG).show();
+                } catch (Exception e) { Toast.makeText(this, "اعداد واردشده معتبر نیستند.", Toast.LENGTH_LONG).show(); }
+            }).show();
     }
 
     private void showSettings() {
@@ -230,16 +269,20 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     }
 
     private void toggleScan() {
+        if (scanning) { finishScan(); return; }
         if (camera == null) {
             statusText.setText("دوربین آماده نیست؛ مجوز دوربین و دسترسی دستگاه را بررسی کنید.");
             return;
         }
-        scanning = !scanning;
-        previous = 0; lastPeak = 0; frames = 0;
+        scanning = true;
+        previous = 0; lastPeak = 0; frames = 0; latestBpm = 0;
+        signalSamples = 0; signalSum = 0; signalSumSq = 0; signalMin = 255; signalMax = 0;
+        scanStartedAt = System.currentTimeMillis();
         bpmText.setText("-- BPM");
-        scanButton.setText(scanning ? "توقف اسکن" : "شروع اسکن");
-        scanTitle.setText(scanning ? "در حال اسکن نبض..." : "آماده اسکن");
-        statusText.setText(scanning ? "انگشت را ثابت نگه دارید؛ نتیجه صرفاً آزمایشی است." : "اسکن متوقف شد.");
+        scanButton.setText("پایان اسکن");
+        scanTitle.setText("در حال ثبت سیگنال مچ");
+        statusText.setText("۴۵ ثانیه ثابت نگه دار؛ نور فلش روشن باشد.");
+        scanHandler.postDelayed(() -> { if (scanning) finishScan(); }, 45000);
         try {
             Camera.Parameters p = camera.getParameters();
             if (p.getSupportedFlashModes() != null) {
@@ -250,13 +293,52 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         } catch (Exception ignored) { }
     }
 
+    private void finishScan() {
+        if (!scanning) return;
+        scanning = false;
+        scanHandler.removeCallbacksAndMessages(null);
+        try {
+            Camera.Parameters p = camera == null ? null : camera.getParameters();
+            if (p != null && p.getSupportedFlashModes() != null && p.getSupportedFlashModes().contains(Camera.Parameters.FLASH_MODE_OFF)) {
+                p.setFlashMode(Camera.Parameters.FLASH_MODE_OFF); camera.setParameters(p);
+            }
+        } catch (Exception ignored) { }
+        long seconds = Math.max(1, (System.currentTimeMillis() - scanStartedAt) / 1000);
+        double mean = signalSamples == 0 ? 0 : signalSum / signalSamples;
+        double variance = signalSamples == 0 ? 0 : Math.max(0, signalSumSq / signalSamples - mean * mean);
+        double sd = Math.sqrt(variance);
+        String quality = signalSamples < 250 ? "داده ناکافی" : (signalMax - signalMin < 0.5 ? "سیگنال ضعیف/بدون تغییر" : "ثبت شد؛ نیازمند بررسی تخصصی");
+        String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(new Date());
+        getPreferences(MODE_PRIVATE).edit().putString("test_date", stamp).putLong("test_duration", seconds)
+            .putInt("test_samples", signalSamples).putInt("test_bpm", latestBpm)
+            .putString("test_quality", quality).putFloat("test_mean", (float)mean)
+            .putFloat("test_sd", (float)sd).putFloat("test_range", (float)(signalMax - signalMin)).apply();
+        scanButton.setText("شروع اسکن ۴۵ ثانیه‌ای");
+        scanTitle.setText("ثبت آزمایش تمام شد");
+        statusText.setText("سیگنال ذخیره شد؛ فشار خون از این داده محاسبه نشده است.");
+        new android.app.AlertDialog.Builder(this).setTitle("پایان اسکن آزمایشی")
+            .setMessage("مدت: " + seconds + " ثانیه\\nنمونه‌ها: " + signalSamples + "\\nضربان تخمینی: " + (latestBpm > 0 ? latestBpm + " BPM" : "نامشخص") +
+                "\\nکیفیت: " + quality + "\\n\\nسیستولیک/دیاستولیک توسط گوشی اندازه‌گیری نشده است. در درمانگاه، فشارسنج دستی را معیار قرار بده.")
+            .setNeutralButton("ثبت عدد درمانگاه", (d,w) -> showClinicEntry())
+            .setPositiveButton("باشه", null).show();
+    }
+
     @Override public void onPreviewFrame(byte[] data, Camera source) {
         if (!scanning || data == null) return;
         Camera.Size s = source.getParameters().getPreviewSize();
-        int count = Math.min(data.length, s.width * s.height);
-        long sum = 0;
-        for (int i = 0; i < count; i++) sum += (data[i] & 255);
+        int width = s.width, height = s.height;
+        int x0 = width / 4, x1 = width * 3 / 4, y0 = height / 4, y1 = height * 3 / 4;
+        long sum = 0; int count = 0;
+        for (int y = y0; y < y1; y += 3) {
+            int row = y * width;
+            for (int x = x0; x < x1; x += 3) {
+                int index = row + x;
+                if (index < data.length) { sum += (data[index] & 255); count++; }
+            }
+        }
         double value = sum / (double)Math.max(1, count);
+        signalSamples++; signalSum += value; signalSumSq += value * value;
+        signalMin = Math.min(signalMin, value); signalMax = Math.max(signalMax, value);
         long now = System.currentTimeMillis();
         frames++;
         if (frames > 10 && previous > value) {
@@ -267,8 +349,9 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
                 int bpm = (int)(60000 / interval);
                 if (interval >= 350 && interval <= 2000 && bpm >= 40 && bpm <= 200) {
                     runOnUiThread(() -> {
+                        latestBpm = bpm;
                         bpmText.setText(bpm + " BPM");
-                        statusText.setText("تخمین آزمایشی؛ برای تصمیم پزشکی معتبر نیست.");
+                        statusText.setText("سیگنال در حال ثبت است؛ فشار خون محاسبه نمی‌شود.");
                     });
                 }
             }
