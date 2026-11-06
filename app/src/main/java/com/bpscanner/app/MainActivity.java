@@ -155,6 +155,17 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         bpActions.addView(historyBp, historyParams);
         root.addView(bpActions, lp(-1, 60));
 
+        Button calibrationButton = new Button(this);
+        calibrationButton.setText("کالیبراسیون آزمایشی با اسکن اخیر");
+        calibrationButton.setTextColor(Color.WHITE);
+        calibrationButton.setBackground(shape(0xFF241018, RED, 14));
+        calibrationButton.setOnClickListener(v -> showCalibrationEntry());
+        LinearLayout.LayoutParams calibrationParams = lp(-1, 48);
+        calibrationParams.topMargin = dp(4);
+        root.addView(calibrationButton, calibrationParams);
+        TextView calibrationInfo = text("برای ساخت مدل شخصی، نتیجه اسکن و فشار مرجع باید هم‌زمان ثبت شوند.", 11, 0xFFFFB8C3, false);
+        root.addView(calibrationInfo, lp(-1, 28));
+
         TextView scanHeading = text("آزمایش ثبت سیگنال مچ", 20, Color.WHITE, true);
         scanHeading.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams sh = lp(-1, 42);
@@ -202,7 +213,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         tiles.addView(tile("↻", "به‌روزرسانی", "بررسی نسخه جدید", () -> new UpdateManager(this).check()), new LinearLayout.LayoutParams(0, dp(108), 1));
         root.addView(tiles, lp(-1, 126));
 
-        TextView disclaimer = text("این نسخه فقط سیگنال نوری مچ و ضربان را برای آزمایش ثبت می‌کند. فشار سیستولیک و دیاستولیک با دوربین هنوز قابل اندازه‌گیری معتبر نیست؛ برای تصمیم درمانی از فشارسنج تأییدشده استفاده کنید.", 11, 0xFFFFB7C1, false);
+        TextView disclaimer = text("این نسخه داده خام PPG و نمونه‌های جفت‌شده با فشارسنج معتبر را برای پژوهش جمع‌آوری می‌کند. هنوز تخمین فشار خون فعال یا اعتبارسنجی نشده است؛ از این برنامه برای تصمیم پزشکی استفاده نکنید.", 11, 0xFFFFB7C1, false);
         disclaimer.setPadding(dp(8), dp(10), dp(8), dp(10));
         disclaimer.setBackground(shape(0xFF170D12, 0xFF6C172B, 14));
         LinearLayout.LayoutParams note = lp(-1, -2);
@@ -283,6 +294,59 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
                     Toast.makeText(this, "فشار خون ذخیره شد.", Toast.LENGTH_LONG).show();
                 } catch (Exception e) { Toast.makeText(this, "اعداد واردشده معتبر نیستند؛ سیستولیک باید از دیاستولیک بیشتر باشد.", Toast.LENGTH_LONG).show(); }
             }).show();
+    }
+
+    private void showCalibrationEntry() {
+        SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        String scanDate = prefs.getString("test_date", null);
+        int samples = prefs.getInt("test_samples", 0);
+        if (scanDate == null || samples < 250) {
+            new android.app.AlertDialog.Builder(this).setTitle("اسکن کافی نیست")
+                .setMessage("ابتدا یک اسکن کامل ۴۵ ثانیه‌ای با سیگنال مناسب انجام بده. برای کالیبراسیون باید اسکن و اندازه‌گیری فشار مرجع تقریباً پشت سر هم و در حالت استراحت انجام شوند.")
+                .setPositiveButton("باشه", null).show();
+            return;
+        }
+        LinearLayout form = vertical();
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        EditText sys = new EditText(this); sys.setSingleLine(true); sys.setInputType(2); sys.setHint("فشار بالا از دستگاه معتبر");
+        EditText dia = new EditText(this); dia.setSingleLine(true); dia.setInputType(2); dia.setHint("فشار پایین از دستگاه معتبر");
+        form.addView(sys, lp(-1, 54)); form.addView(dia, lp(-1, 54));
+        String previewInfo = "اسکن: " + scanDate + "\\nنمونه: " + samples +
+            "\\nضربان: " + prefs.getInt("test_bpm", 0) + " BPM" +
+            "\\nدامنه سیگنال: " + String.format(Locale.US, "%.2f", prefs.getFloat("test_range", 0));
+        new android.app.AlertDialog.Builder(this).setTitle("جفت‌کردن اسکن و فشار مرجع")
+            .setMessage(previewInfo + "\\n\\nفشار را با دستگاه معتبر در همان نوبت اندازه بگیر. این داده فقط برای پژوهش و ارزیابی الگوریتم ذخیره می‌شود.")
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره نمونه", (d,w) -> {
+                try {
+                    int s = Integer.parseInt(sys.getText().toString().trim());
+                    int di = Integer.parseInt(dia.getText().toString().trim());
+                    if (s < 60 || s > 260 || di < 30 || di > 160 || s <= di) throw new Exception();
+                    String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(new Date());
+                    String row = stamp + "|" + s + "|" + di + "|" + prefs.getInt("test_bpm", 0) +
+                        "|" + prefs.getFloat("test_mean", 0) + "|" + prefs.getFloat("test_sd", 0) +
+                        "|" + prefs.getFloat("test_range", 0) + "|" + samples;
+                    String old = prefs.getString("calibration_records", "");
+                    prefs.edit().putString("calibration_records", row + (old.isEmpty() ? "" : "\\n" + old))
+                        .putInt("calibration_count", prefs.getInt("calibration_count", 0) + 1).apply();
+                    Toast.makeText(this, "نمونه کالیبراسیون ذخیره شد؛ هنوز تخمین فشار فعال نشده است.", Toast.LENGTH_LONG).show();
+                    showCalibrationStatus();
+                } catch (Exception e) {
+                    Toast.makeText(this, "عددهای فشار مرجع معتبر نیستند.", Toast.LENGTH_LONG).show();
+                }
+            }).show();
+    }
+
+    private void showCalibrationStatus() {
+        SharedPreferences p = getPreferences(MODE_PRIVATE);
+        int count = p.getInt("calibration_count", 0);
+        String records = p.getString("calibration_records", "");
+        String message = "نمونه‌های جفت‌شده: " + count +
+            "\\nبرای ارزیابی اولیه حداقل ۱۰ نوبت مستقل لازم است؛ بیشتر بودن و تنوع اندازه‌گیری‌ها بهتر است." +
+            "\\n\\nهنوز هیچ عدد فشار تخمینی تولید نمی‌شود؛ ابتدا باید کیفیت داده و امکان پیش‌بینی با داده‌های جداگانه بررسی شود." +
+            (records.isEmpty() ? "" : "\\n\\nآخرین نمونه‌ها (زمان | SYS | DIA | BPM | میانگین نور | انحراف | دامنه | تعداد فریم):\\n" + records);
+        new android.app.AlertDialog.Builder(this).setTitle("وضعیت کالیبراسیون آزمایشی")
+            .setMessage(message).setPositiveButton("بستن", null).show();
     }
 
     private void showBpHistory() {
