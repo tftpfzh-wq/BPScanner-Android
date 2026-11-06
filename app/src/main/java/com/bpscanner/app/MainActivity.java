@@ -82,10 +82,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         }
         previous=v;
     }
-    private void startCamera() {
-        try { camera=Camera.open(); camera.setPreviewDisplay(holder); camera.setPreviewCallback(this); camera.startPreview(); }
-        catch(Exception e){statusText.setText("راه‌اندازی دوربین ناموفق بود.");releaseCamera();}
-    }
     @Override public void surfaceCreated(SurfaceHolder h){
         if(activityResumed && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera();
     }
