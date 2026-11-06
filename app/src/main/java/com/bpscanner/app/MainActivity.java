@@ -32,7 +32,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     private Camera camera;
     private SurfaceView preview;
     private SurfaceHolder holder;
-    private TextView bpmText, statusText, scanTitle, pressureValue;
+    private TextView bpmText, statusText, scanTitle, pressureValue, timerText;
     private Button scanButton;
     private boolean scanning = false;
     private boolean activityResumed = false;
@@ -157,6 +157,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         scanTitle = text("آماده اسکن", 20, 0xFFFF667D, true);
         root.addView(scanTitle, lp(-1, 36));
+        timerText = text("زمان باقی‌مانده: ۴۵ ثانیه", 22, RED, true);
+        root.addView(timerText, lp(-1, 38));
         statusText = text("انگشت خود را آرام روی دوربین و فلش قرار دهید.", 13, 0xFFE5D9DE, false);
         root.addView(statusText, lp(-1, 34));
 
@@ -282,7 +284,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         scanButton.setText("پایان اسکن");
         scanTitle.setText("در حال ثبت سیگنال مچ");
         statusText.setText("۴۵ ثانیه ثابت نگه دار؛ نور فلش روشن باشد.");
-        scanHandler.postDelayed(() -> { if (scanning) finishScan(); }, 45000);
+        timerText.setText("زمان باقی‌مانده: ۴۵ ثانیه");
+        updateCountdown();
         try {
             Camera.Parameters p = camera.getParameters();
             if (p.getSupportedFlashModes() != null) {
@@ -293,10 +296,23 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         } catch (Exception ignored) { }
     }
 
+    private void updateCountdown() {
+        if (!scanning) return;
+        long elapsed = System.currentTimeMillis() - scanStartedAt;
+        long remaining = Math.max(0, (45000 - elapsed + 999) / 1000);
+        timerText.setText("زمان باقی‌مانده: " + remaining + " ثانیه");
+        if (remaining <= 0) {
+            finishScan();
+        } else {
+            scanHandler.postDelayed(this::updateCountdown, 250);
+        }
+    }
+
     private void finishScan() {
         if (!scanning) return;
         scanning = false;
         scanHandler.removeCallbacksAndMessages(null);
+        if (timerText != null) timerText.setText("زمان اسکن: پایان‌یافته");
         try {
             Camera.Parameters p = camera == null ? null : camera.getParameters();
             if (p != null && p.getSupportedFlashModes() != null && p.getSupportedFlashModes().contains(Camera.Parameters.FLASH_MODE_OFF)) {
@@ -385,6 +401,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
     private void releaseCamera() {
         scanning = false;
         if (scanButton != null) scanButton.setText("شروع اسکن");
+        if (timerText != null) timerText.setText("زمان باقی‌مانده: ۴۵ ثانیه");
         if (camera != null) {
             Camera old = camera;
             camera = null;
