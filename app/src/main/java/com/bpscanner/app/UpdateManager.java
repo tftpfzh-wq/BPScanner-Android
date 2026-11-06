@@ -150,7 +150,11 @@ public class UpdateManager {
     public void resumePendingInstall() {
         try {
             File apk = new File(new File(activity.getCacheDir(), "updates"), "BPScanner.apk");
-            if (!apk.isFile() || apk.length() == 0) return;
+            if (!activity.getPreferences(Activity.MODE_PRIVATE).getBoolean("pending_update_install", false)) return;
+            if (!apk.isFile() || apk.length() == 0) {
+                activity.getPreferences(Activity.MODE_PRIVATE).edit().remove("pending_update_install").apply();
+                return;
+            }
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
             launchInstaller(apk);
         } catch (Exception ignored) { }
@@ -159,10 +163,11 @@ public class UpdateManager {
     private void install(File apk) {
         try {
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
+                activity.getPreferences(Activity.MODE_PRIVATE).edit().putBoolean("pending_update_install", true).apply();
                 new AlertDialog.Builder(activity)
                     .setTitle("اجازه نصب آپدیت")
                     .setMessage("برای نصب نسخه جدید، اجازه نصب برنامه از این منبع را فعال کنید. پس از فعال‌سازی، به BP Scanner برگردید تا نصب ادامه پیدا کند.")
-                    .setNegativeButton("لغو", null)
+                    .setNegativeButton("لغو", (d, w) -> activity.getPreferences(Activity.MODE_PRIVATE).edit().remove("pending_update_install").apply())
                     .setPositiveButton("تنظیمات", (d, w) -> activity.startActivity(
                         new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:" + activity.getPackageName()))))
@@ -176,6 +181,7 @@ public class UpdateManager {
     }
 
     private void launchInstaller(File apk) throws Exception {
+            activity.getPreferences(Activity.MODE_PRIVATE).edit().remove("pending_update_install").apply();
             Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".fileprovider", apk);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, "application/vnd.android.package-archive");
