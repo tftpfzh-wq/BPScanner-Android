@@ -135,6 +135,25 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         pressure.addView(text("نیازمند اعتبارسنجی پزشکی", 11, 0xFFFFB8C3, false), lp(-1, 24));
         metrics.addView(pressure, new LinearLayout.LayoutParams(0, dp(112), 1));
         root.addView(metrics, lp(-1, 138));
+        String savedBp = getPreferences(MODE_PRIVATE).getString("clinic_bp", null);
+        if (savedBp != null) pressureValue.setText(savedBp);
+        LinearLayout bpActions = horizontal();
+        bpActions.setPadding(0, dp(8), 0, dp(4));
+        Button addBp = new Button(this);
+        addBp.setText("ثبت فشار خون");
+        addBp.setTextColor(Color.WHITE);
+        addBp.setBackground(shape(RED, 0, 14));
+        addBp.setOnClickListener(v -> showClinicEntry());
+        bpActions.addView(addBp, new LinearLayout.LayoutParams(0, dp(48), 1));
+        Button historyBp = new Button(this);
+        historyBp.setText("سوابق فشار");
+        historyBp.setTextColor(Color.WHITE);
+        historyBp.setBackground(shape(PANEL, RED, 14));
+        historyBp.setOnClickListener(v -> showBpHistory());
+        LinearLayout.LayoutParams historyParams = new LinearLayout.LayoutParams(0, dp(48), 1);
+        historyParams.leftMargin = dp(8);
+        bpActions.addView(historyBp, historyParams);
+        root.addView(bpActions, lp(-1, 60));
 
         TextView scanHeading = text("آزمایش ثبت سیگنال مچ", 20, Color.WHITE, true);
         scanHeading.setGravity(Gravity.CENTER);
@@ -246,18 +265,33 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
         EditText sys = new EditText(this); sys.setSingleLine(true); sys.setInputType(2); sys.setHint("سیستولیک (عدد بالا)، مثلاً 120");
         EditText dia = new EditText(this); dia.setSingleLine(true); dia.setInputType(2); dia.setHint("دیاستولیک (عدد پایین)، مثلاً 80");
         form.addView(sys, lp(-1, 54)); form.addView(dia, lp(-1, 54));
-        new android.app.AlertDialog.Builder(this).setTitle("ثبت نتیجه فشارسنج درمانگاه")
-            .setMessage("اعداد را دقیقاً از روی اندازه‌گیری پرستار وارد کن. این اعداد مرجع مقایسه‌اند و خروجی گوشی نیستند.")
+        new android.app.AlertDialog.Builder(this).setTitle("ثبت فشار خون اندازه‌گیری‌شده")
+            .setMessage("عددها را از فشارسنج معتبر یا برگه درمانگاه وارد کن؛ دوربین گوشی این اعداد را اندازه‌گیری نمی‌کند.")
             .setView(form).setNegativeButton("لغو", null)
             .setPositiveButton("ذخیره", (d,w) -> {
                 try {
                     int s = Integer.parseInt(sys.getText().toString().trim());
                     int diaValue = Integer.parseInt(dia.getText().toString().trim());
                     if (s < 60 || s > 260 || diaValue < 30 || diaValue > 160 || s <= diaValue) throw new Exception();
-                    getPreferences(MODE_PRIVATE).edit().putString("clinic_bp", s + "/" + diaValue + " mmHg").apply();
-                    Toast.makeText(this, "نتیجه درمانگاه ذخیره شد.", Toast.LENGTH_LONG).show();
-                } catch (Exception e) { Toast.makeText(this, "اعداد واردشده معتبر نیستند.", Toast.LENGTH_LONG).show(); }
+                    String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(new Date());
+                    String record = stamp + " | " + s + "/" + diaValue + " mmHg";
+                    SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+                    String oldRecords = prefs.getString("bp_records", "");
+                    String updated = record + (oldRecords.length() == 0 ? "" : "\\n" + oldRecords);
+                    prefs.edit().putString("bp_records", updated).putString("clinic_bp", s + "/" + diaValue + " mmHg").apply();
+                    pressureValue.setText(s + "/" + diaValue);
+                    Toast.makeText(this, "فشار خون ذخیره شد.", Toast.LENGTH_LONG).show();
+                } catch (Exception e) { Toast.makeText(this, "اعداد واردشده معتبر نیستند؛ سیستولیک باید از دیاستولیک بیشتر باشد.", Toast.LENGTH_LONG).show(); }
             }).show();
+    }
+
+    private void showBpHistory() {
+        String records = getPreferences(MODE_PRIVATE).getString("bp_records", "");
+        String message = records.length() == 0 ? "هنوز نتیجه‌ای ثبت نشده است." : records;
+        new android.app.AlertDialog.Builder(this).setTitle("سوابق فشار خون (mmHg)")
+            .setMessage(message)
+            .setNeutralButton("ثبت فشار جدید", (d,w) -> showClinicEntry())
+            .setPositiveButton("بستن", null).show();
     }
 
     private void showSettings() {
